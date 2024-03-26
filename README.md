@@ -1,5 +1,5 @@
 # zrive-ds
-Este repositorio contiene la estructura que utilizaremos para el programa Zrive Applied Data Science (https://zriveapp.com/cursos/zrive-applied-data-science).
+Este repositorio contiene la estructura que utilizaremos para el proyecto de "Predicción del estado de madurez de la oliva" planteado por Komorebi para el programa Zrive Applied Data Science (https://zriveapp.com/program/zrive-applied-data-science)
 
 ## Set up
 Para asegurar consistencia utilizaremos todos **python version = 3.11.0**, además usaremos `pyenv` para la gestión de versiones de python y `poetry` para gestionar virtualenvs y dependencias. Estas tecnologías son una elección en cierta medida arbitraria, aunque las herramientas utilizadas son ampliamente utilizadas, hay otras opciones como `venv`, `virtualenv` o `pipenv` para virtualenvs, o conda para gestión de paquetes, que también se utilizan de forma extensa.
