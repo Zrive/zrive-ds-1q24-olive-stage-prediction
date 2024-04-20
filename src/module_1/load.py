@@ -162,12 +162,7 @@ def remove_codparcelas_not_in_meteo_data(df: pd.DataFrame) -> pd.DataFrame:
     """
     logging.info("remove_codparcelas_not_in_meteo_data")
 
-    # meteo_raw_data = load_raw_data(METEO_DATA_PATH)
-    # codparcelas_in_meteo = set(meteo_raw_data["codparcela"])
     column = "codparcela"
-    # codparcelas_in_meteo = set(
-    #     pd.read_parquet(METEO_DATA_PATH, columns=[column])[column]
-    # )
     codparcelas_in_meteo = set(load_raw_data(METEO_DATA_PATH)[column])
 
     df = df[df["codparcela"].isin(codparcelas_in_meteo)]
