@@ -12,6 +12,12 @@ METEO_DATA_PATH = os.path.join(DATA_PATH, "meteo_parcelas.parquet")
 
 PHENOLOGICAL_STATE_COLS = [f"estado_fenologico_{i}" for i in range(14, 0, -1)]
 
+MAX_SPACING_BETWEEN_SAMPLES_IN_DAYS = 60
+
+# Keep rows that are between these dates (inclusive)
+START_DATE = pd.Timestamp("2018-01-01")
+END_DATE = pd.Timestamp("2020-12-31")
+
 
 def load_raw_data(path: str) -> pd.DataFrame:
     logging.info(f"Loading dataset from {path}")
@@ -85,7 +91,7 @@ def create_majority_phenological_state_column(
         for col in phenological_state_cols:
             if row[col] == 2:
                 return int(col.split("_")[-1])
-        return pd.NA
+        return None
 
     df_new = df.copy()
     df_new["estado_mayoritario"] = df_new.apply(get_majority_state, axis=1)
@@ -96,61 +102,46 @@ def create_majority_phenological_state_column(
     return df_new
 
 
-def create_primary_key_with_codparcela_and_provincia(df: pd.DataFrame) -> pd.DataFrame:
+def remove_codparcela_with_multiple_provincia(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Create a primary key column using codparcela and provincia
+    Remove rows where a codparcela is associated with multiple provinces.
     """
-    logging.info("create_primary_key_with_codparcela_and_provincia")
+    logging.info("Removing rows with multiple provinces for the same codparcela")
 
-    df["pkey"] = df["codparcela"].astype(str) + "_" + df["provincia"].astype(str)
+    codparcela_provincia_counts = df.groupby("codparcela", observed=False)[
+        "provincia"
+    ].nunique()
 
-    logging.info(f"Dataset shape: {df.shape}")
-    return df
+    codparcelas_with_single_provincia = codparcela_provincia_counts[
+        codparcela_provincia_counts == 1
+    ].index
+    filtered_df = df[df["codparcela"].isin(codparcelas_with_single_provincia)]
+
+    logging.info(f"Dataset shape: {filtered_df.shape}")
+    return filtered_df
 
 
-def remove_low_samples_for_pkey_in_campaign(
-    df: pd.DataFrame, min_num_samples: int = 10
+def remove_highly_spaced_samples_for_codparcela_in_campaign(
+    df: pd.DataFrame, max_spacing_in_days: int = MAX_SPACING_BETWEEN_SAMPLES_IN_DAYS
 ) -> pd.DataFrame:
     """
-    Remove the samples of a (codparcela, provincia) in a campaign if it has less
-    than min_num_samples
-    """
-    logging.info("remove_codparcela_with_low_samples_in_campaign")
-
-    parcela_counts_per_campaign = (
-        df.groupby(["campaña", "pkey"])
-        .size()
-        .reset_index()
-        .rename({0: "count_muestras_campaña"}, axis=1)
-    )
-
-    df = df.merge(
-        parcela_counts_per_campaign, how="left", on=["campaña", "pkey"]
-    ).sort_values(by=["pkey", "campaña"])
-    df = df[df["count_muestras_campaña"] >= min_num_samples]
-    df = df.drop("count_muestras_campaña", axis=1)
-
-    logging.info(f"Dataset shape: {df.shape}")
-    return df
-
-
-def remove_highly_spaced_samples_for_pkey_in_campaign(
-    df: pd.DataFrame, max_spacing_in_days: int = 30
-) -> pd.DataFrame:
-    """
-    Remove the samples of a (codparcela, provincia) in a campaign if their date
+    Remove the samples of a codparcela in a campaign if their date
     difference to the next sample is more than max_spacing_in_days
     """
-    logging.info("remove_highly_spaced_samples_for_pkey_in_campaign")
+    logging.info("remove_highly_spaced_samples_for_codparcela_in_campaign")
 
     new_df = df.copy()
-    new_df = new_df.sort_values(by=["pkey", "fecha"])
-    new_df["diferencia_dias"] = (
-        new_df.groupby(["pkey", "campaña"], as_index=False)["fecha"].diff().dt.days
+    new_df = new_df.sort_values(by=["codparcela", "fecha"])
+    new_df["days_diff"] = (
+        new_df.groupby(["codparcela", "campaña"], as_index=False, observed=False)[
+            "fecha"
+        ]
+        .diff()
+        .dt.days
     )
-    new_df["diferencia_dias"] = new_df["diferencia_dias"].fillna(0)
-    new_df = new_df[new_df["diferencia_dias"] <= max_spacing_in_days]
-    new_df = new_df.drop("diferencia_dias", axis=1)
+    new_df["days_diff"] = new_df["days_diff"].fillna(0)
+    new_df = new_df[new_df["days_diff"] <= max_spacing_in_days]
+    new_df = new_df.drop("days_diff", axis=1)
 
     logging.info(f"Dataset shape: {new_df.shape}")
     return new_df
@@ -162,12 +153,7 @@ def remove_codparcelas_not_in_meteo_data(df: pd.DataFrame) -> pd.DataFrame:
     """
     logging.info("remove_codparcelas_not_in_meteo_data")
 
-    # meteo_raw_data = load_raw_data(METEO_DATA_PATH)
-    # codparcelas_in_meteo = set(meteo_raw_data["codparcela"])
     column = "codparcela"
-    # codparcelas_in_meteo = set(
-    #     pd.read_parquet(METEO_DATA_PATH, columns=[column])[column]
-    # )
     codparcelas_in_meteo = set(load_raw_data(METEO_DATA_PATH)[column])
 
     df = df[df["codparcela"].isin(codparcelas_in_meteo)]
@@ -176,11 +162,8 @@ def remove_codparcelas_not_in_meteo_data(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def build_feature_frame(data: pd.DataFrame) -> pd.DataFrame:
-    logging.info("Building feature frame")
-
-    START_DATE = pd.Timestamp("2018-01-01")
-    END_DATE = pd.Timestamp("2020-12-31")
+def clean_data(data: pd.DataFrame) -> pd.DataFrame:
+    logging.info("Cleaning dataset")
 
     logging.info(f"Dataset shape before cleaning: {data.shape}")
     preprocessed_data = (
@@ -188,16 +171,15 @@ def build_feature_frame(data: pd.DataFrame) -> pd.DataFrame:
         .pipe(remove_rows_with_all_null_phenological_states)
         .pipe(convert_uninformed_states_to_nan)
         .pipe(create_majority_phenological_state_column)
-        .pipe(create_primary_key_with_codparcela_and_provincia)
-        .pipe(remove_low_samples_for_pkey_in_campaign)
-        .pipe(remove_highly_spaced_samples_for_pkey_in_campaign)
+        .pipe(remove_codparcela_with_multiple_provincia)
+        .pipe(remove_highly_spaced_samples_for_codparcela_in_campaign)
         .pipe(remove_codparcelas_not_in_meteo_data)
     )
     return preprocessed_data
 
 
-def load_training_feature_frame() -> pd.DataFrame:
-    logging.info("Loading feature frame")
+def load_clean_data() -> pd.DataFrame:
+    logging.info("Loading dataset")
     parcelas_raw_data = load_raw_data(PARCELAS_DATA_PATH)
-    data = build_feature_frame(parcelas_raw_data)
+    data = clean_data(parcelas_raw_data)
     return data

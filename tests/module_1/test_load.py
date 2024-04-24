@@ -7,9 +7,8 @@ from src.module_1.load import (
     convert_uninformed_states_to_nan,
     remove_rows_with_all_null_phenological_states,
     create_majority_phenological_state_column,
-    create_primary_key_with_codparcela_and_provincia,
-    remove_low_samples_for_pkey_in_campaign,
-    remove_highly_spaced_samples_for_pkey_in_campaign,
+    remove_codparcela_with_multiple_provincia,
+    remove_highly_spaced_samples_for_codparcela_in_campaign,
     remove_codparcelas_not_in_meteo_data,
 )
 
@@ -148,66 +147,23 @@ def test_create_majority_phenological_state_column() -> None:
     )
 
 
-def test_create_primary_key_with_codparcela_and_provincia() -> None:
-    df = pd.DataFrame({"codparcela": [1, 2, 3], "provincia": ["A", "B", "C"]})
+def test_remove_codparcela_with_multiple_provincia() -> None:
+    df = pd.DataFrame({"codparcela": [1, 2, 3, 3], "provincia": ["A", "B", "C", "A"]})
 
-    result = create_primary_key_with_codparcela_and_provincia(df)
+    result = remove_codparcela_with_multiple_provincia(df)
 
-    assert "pkey" in result.columns
-
-    expected_pkeys = ["1_A", "2_B", "3_C"]
-    assert result["pkey"].tolist() == expected_pkeys
-
-
-def test_remove_low_samples_for_pkey_in_campaign() -> None:
-    df = pd.DataFrame(
-        {
-            "campaña": ["A", "A", "A", "A", "B", "B", "B", "B", "B", "B", "C"],
-            "pkey": [
-                "1_A",
-                "1_A",
-                "1_A",
-                "2_B",
-                "2_B",
-                "2_B",
-                "3_C",
-                "3_C",
-                "3_C",
-                "3_C",
-                "4_D",
-            ],
-        }
-    )
-
-    result = remove_low_samples_for_pkey_in_campaign(df, min_num_samples=2)
-
-    expected = pd.DataFrame(
-        {
-            "campaña": ["A", "A", "A", "B", "B", "B", "B", "B", "B"],
-            "pkey": [
-                "1_A",
-                "1_A",
-                "1_A",
-                "2_B",
-                "2_B",
-                "3_C",
-                "3_C",
-                "3_C",
-                "3_C",
-            ],
-        }
-    )
+    expected = pd.DataFrame({"codparcela": [1, 2], "provincia": ["A", "B"]})
     pd.testing.assert_frame_equal(
         result.reset_index(drop=True),
         expected.reset_index(drop=True),
     )
 
 
-def test_remove_highly_spaced_samples_for_pkey_in_campaign() -> None:
+def test_remove_highly_spaced_samples_for_codparcela_in_campaign() -> None:
     df = pd.DataFrame(
         {
             "campaña": ["A", "A", "A", "A", "A", "A", "B", "B", "B"],
-            "pkey": ["1_A", "1_A", "1_A", "1_A", "1_A", "1_A", "2_B", "2_B", "2_B"],
+            "codparcela": ["1", "1", "1", "1", "1", "1", "2", "2", "2"],
             "fecha": [
                 "2022-01-01",
                 "2022-01-05",
@@ -226,7 +182,7 @@ def test_remove_highly_spaced_samples_for_pkey_in_campaign() -> None:
     expected = pd.DataFrame(
         {
             "campaña": ["A", "A", "A", "A", "A", "A", "B", "B"],
-            "pkey": ["1_A", "1_A", "1_A", "1_A", "1_A", "1_A", "2_B", "2_B"],
+            "codparcela": ["1", "1", "1", "1", "1", "1", "2", "2"],
             "fecha": [
                 "2022-01-01",
                 "2022-01-05",
@@ -241,7 +197,7 @@ def test_remove_highly_spaced_samples_for_pkey_in_campaign() -> None:
     )
     expected["fecha"] = pd.to_datetime(expected["fecha"])
 
-    result = remove_highly_spaced_samples_for_pkey_in_campaign(
+    result = remove_highly_spaced_samples_for_codparcela_in_campaign(
         df, max_spacing_in_days=30
     )
 
