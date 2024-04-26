@@ -1,8 +1,8 @@
 import pandas as pd
 
 
-TARGET_COLS = ['pkey','fecha','estado_mayoritario']
-SPINE_COLS = ['pkey','fecha','target']
+TARGET_COLS = ['codparcela','fecha','estado_mayoritario']
+SPINE_COLS = ['codparcela','fecha','target']
 
 
 def generate_target(parcelas_df:pd.DataFrame, window_size:int=14, window_tolerance:int=2)-> pd.DataFrame:
@@ -15,7 +15,7 @@ def generate_target(parcelas_df:pd.DataFrame, window_size:int=14, window_toleran
     # Join between the 2 dfs with a time delta (±2 days)
     parcelas_with_target_df = pd.merge_asof(
                 parcelas_df.sort_values('fecha'), df.sort_values('fecha'), 
-                by='pkey', left_on='fecha_futuro', right_on='fecha', 
+                by='codparcela', left_on='fecha_futuro', right_on='fecha', 
                        suffixes=('', '_future'), direction='nearest', tolerance=pd.Timedelta(days=window_tolerance))
 
     # Generate target column - Number of phenological states that passed in the chosen window size
@@ -24,10 +24,10 @@ def generate_target(parcelas_df:pd.DataFrame, window_size:int=14, window_toleran
     # Drop all rows with NULL in target
     parcelas_with_target_df = parcelas_with_target_df[parcelas_with_target_df['target'].notnull()]
 
-    # Input to 0 when target column ins negative
+    # Input to 0 when target column is negative
     parcelas_with_target_df.loc[parcelas_with_target_df['target'] < 0, 'target'] = 0
     
-    return parcelas_with_target_df
+    return parcelas_with_target_df.sort_values(by=['codparcela','fecha'])
 
 
 def create_spine(parcelas_df:pd.DataFrame)-> pd.DataFrame:
