@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from unittest.mock import patch
 
-from src.module_1.load import (
+from src.load import (
     filter_parcelas_by_dates,
     convert_uninformed_states_to_nan,
     remove_rows_with_all_null_phenological_states,
@@ -206,7 +206,7 @@ def test_remove_highly_spaced_samples_for_codparcela_in_campaign() -> None:
     )
 
 
-@patch("src.module_1.load.load_raw_data")
+@patch("src.load.load_raw_data")
 def test_remove_codparcelas_not_in_meteo_data(mock_load_raw_data):
     mock_load_raw_data.return_value = pd.DataFrame({"codparcela": [0, 1, 2, 3]})
 
