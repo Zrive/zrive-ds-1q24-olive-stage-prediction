@@ -16,7 +16,7 @@ MAX_SPACING_BETWEEN_SAMPLES_IN_DAYS = 60
 
 # Keep rows that are between these dates (inclusive)
 START_DATE = pd.Timestamp("2018-01-01")
-END_DATE = pd.Timestamp("2020-12-31")
+END_DATE = pd.Timestamp("2022-12-31")
 
 
 def load_raw_data(path: str) -> pd.DataFrame:
