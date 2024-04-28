@@ -1,51 +1,32 @@
 import pandas as pd
-import numpy as np
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import accuracy_score, mean_squared_error
 
 
-def accuracy(test: pd.DataFrame, actual_col: str, pred_col: str):
+def metrics(y: pd.Series, y_pred: pd.Series):
     """
-    Calcula la precisión de un modelo comparando las columnas de valores reales y predichos en un DataFrame.
-    Los valores predichos son redondeados antes de calcular la precisión.
+    Calcula tanto la precisión como el error cuadrático medio (MSE) para un modelo basado en series de valores reales
+    y predichos. Los valores predichos son redondeados antes de calcular la precisión.
 
     Parámetros:
-    test (pd.DataFrame): DataFrame que contiene las columnas de valores reales y predicciones.
-    actual_col (str): Nombre de la columna en el DataFrame que contiene los valores reales.
-    pred_col (str): Nombre de la columna en el DataFrame que contiene los valores predichos.
+    y (pd.Series): Serie que contiene los valores reales.
+    y_pred (pd.Series): Serie que contiene los valores predichos.
 
     Devuelve:
-    float: El valor de precisión del modelo.
+    dict: Diccionario con los valores de precisión y MSE del modelo.
     """
 
-    mask = test[actual_col].notna()
-    test_filtered = test[mask]
+    # Asegurarse de que ambas series no tienen valores NaN donde se compara
+    mask = y.notna() & y_pred.notna()
+    y_filtered = y[mask]
+    y_pred_filtered = y_pred[mask]
 
-    test_filtered['y_pred_rounded'] = test_filtered[pred_col].round()
+    # Redondear las predicciones para calcular la precisión
+    y_pred_rounded = y_pred_filtered.round()
+    accuracy_result = accuracy_score(y_filtered, y_pred_rounded)
 
-    accuracy = accuracy_score(
-        test_filtered[actual_col], test_filtered['y_pred_rounded'])
+    # Calcular el MSE con los valores predichos originales, no los redondeados
+    mse_result = mean_squared_error(y_filtered, y_pred_filtered)
 
-    return accuracy
-# accuracy(test, 'y', 'y_pred')
-
-
-def mse(test: pd.DataFrame, actual_col: str, pred_col: str):
-    """
-    Calcula el error cuadrático medio (MSE) para un modelo comparando las columnas de valores reales y predichos en un DataFrame.
-
-    Parámetros:
-    test (pd.DataFrame): DataFrame que contiene las columnas de valores reales y predicciones.
-    actual_col (str): Nombre de la columna en el DataFrame que contiene los valores reales.
-    pred_col (str): Nombre de la columna en el DataFrame que contiene los valores predichos.
-
-    Devuelve:
-    float: El valor de MSE del modelo.
-    """
-
-    mask = test[actual_col].notna()
-    test_filtered = test[mask]
-
-    mse = mean_squared_error(test_filtered[actual_col], test_filtered[pred_col])
-
-    return mse
-# mse(test, 'y', 'y_pred')
+    # Devolver los resultados en un diccionario
+    return {'accuracy': accuracy_result, 'mse': mse_result}
+# metrics(test_set['y'], test_set['y_pred'])
