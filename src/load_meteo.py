@@ -4,8 +4,10 @@ import os
 
 logging.basicConfig(level=logging.INFO)
 
-DATA_PATH = os.path.join(os.getcwd(), "..", "data")
+DATA_PATH = os.path.join(os.getcwd(), "data")
 METEO_DATA_PATH = os.path.join(DATA_PATH, "meteo_parcelas.parquet")
+METEO_DATA_PATH = os.path.join(DATA_PATH, "clean_meteo.parquet")
+
 
 INDICES_TO_DROP_NANS = ["SSM"]
 INDICES_TO_DROP_ZEROS = ["NDVI", "NDWI", "SAVI", "GNDVI", "SIPI"]
@@ -107,6 +109,7 @@ def clean_meteo_data(data: pd.DataFrame) -> pd.DataFrame:
             indice=INDICE_TO_NORMALIZE,
             max_non_normalized_value=MAX_NON_NORMALIZED_FAPAR_VALUE,
         )
+        
     )
     return preprocessed_data
 
@@ -118,4 +121,7 @@ def load_clean_meteo_data() -> pd.DataFrame:
     logging.info("Loading clean meteo dataset")
     meteo_raw_data = load_raw_data(METEO_DATA_PATH)
     data = clean_meteo_data(meteo_raw_data)
+
+    data = data.pivot_table(index=['fecha', 'codparcela', 'lat', 'lon'], columns='indice', values='valor', aggfunc='mean').reset_index()
+
     return data
