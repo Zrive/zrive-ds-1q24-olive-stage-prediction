@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 TARGET_COLS = ['codparcela','fecha','estado_mayoritario']
 SPINE_COLS = ['codparcela','fecha','target']
@@ -71,7 +72,7 @@ def attach_meteo_var(
     total_df = pd.merge_asof(
             spine_df.sort_values('fecha'), meteo_df[['codparcela', 'fecha'] + columns_to_attach].sort_values('fecha'), 
             by='codparcela', left_on='fecha', right_on='fecha', 
-            direction='nearest', tolerance=pd.Timedelta(days=window_tolerance))
+            direction='backward', tolerance=pd.Timedelta(days=window_tolerance))
 
     return total_df
 
@@ -89,3 +90,36 @@ def calculate_climatic_stats_time_window(meteo_df:pd.DataFrame, rolling_window:s
     stat_df = stat_df.reset_index()
 
     return stat_df
+
+
+def calculate_week_number(parcelas_df:pd.DataFrame)->pd.DataFrame:
+    df = parcelas_df.copy()
+    # Convert fecha column to datetime
+    df['fecha'] = pd.to_datetime(df['fecha'])
+
+    # Add a new column for the week number
+    df['week_number'] = df['fecha'].dt.isocalendar().week
+    return df
+
+
+def calculates_days_in_phenological_state_current_and_previous(parcelas_df:pd.DataFrame)->pd.DataFrame:
+    df = parcelas_df[['fecha','codparcela','campaña','estado_mayoritario']]
+
+    df = df.sort_values(by=['codparcela', 'fecha'])
+
+    # Calculate days difference
+    df['days_spent'] = df.groupby(['codparcela','campaña'])['fecha'].diff().dt.days
+
+    # Identify changes in 'estado_mayoritario' and assign a group ID for each period of the same state
+    df['state_change'] = df['estado_mayoritario'].ne(df['estado_mayoritario'].shift(1))
+    df['period_id'] = df['state_change'].cumsum()
+
+    # Calculate total days spent in each state before change
+    df['days_in_current_state'] = df.groupby(['codparcela','campaña','period_id'])['days_spent'].cumsum()    
+
+    # Calculate total days spent in previous state
+    df['days_in_previous_state'] = np.where(df['state_change'] == True & df['campaña'].eq(df['campaña'].shift(1)) & df['codparcela'].eq(df['codparcela'].shift(1)),
+                                             df['days_in_current_state'].shift(1), np.nan)
+    df['days_in_previous_state'] = df.groupby(['codparcela','campaña'])['days_in_previous_state'].ffill()
+    
+    return df[['codparcela','fecha','days_in_current_state','days_in_previous_state']]
