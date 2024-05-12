@@ -5,7 +5,7 @@ import os
 logging.basicConfig(level=logging.INFO)
 
 DATA_PATH = os.path.join(os.getcwd(), "..", "data")
-METEO_DATA_PATH = os.path.join(DATA_PATH, "meteo_parcelas.parquet")
+METEO_DATA_PATH = os.path.join(DATA_PATH, "meteo.parquet")
 
 INDICES_TO_DROP_NANS = ["SSM"]
 INDICES_TO_DROP_ZEROS = ["NDVI", "NDWI", "SAVI", "GNDVI", "SIPI"]

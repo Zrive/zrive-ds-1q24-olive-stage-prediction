@@ -7,8 +7,8 @@ from typing import Optional
 logging.basicConfig(level=logging.INFO)
 
 DATA_PATH = os.path.join(os.getcwd(), "..", "data")
-PARCELAS_DATA_PATH = os.path.join(DATA_PATH, "muestreos_parcelas.parquet")
-METEO_DATA_PATH = os.path.join(DATA_PATH, "meteo_parcelas.parquet")
+PARCELAS_DATA_PATH = os.path.join(DATA_PATH, "muestreos_parcelas_2023.parquet")
+METEO_DATA_PATH = os.path.join(DATA_PATH, "meteo.parquet")
 
 PHENOLOGICAL_STATE_COLS = [f"estado_fenologico_{i}" for i in range(14, 0, -1)]
 
