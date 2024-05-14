@@ -27,6 +27,9 @@ def generate_target(parcelas_df:pd.DataFrame, window_size:int=14, window_toleran
 
     # Input to 0 when target column is negative
     parcelas_with_target_df.loc[parcelas_with_target_df['target'] < 0, 'target'] = 0
+
+    # Impute to 3 when target column is greater than 3
+    parcelas_with_target_df.loc[parcelas_with_target_df['target'] >= 3, 'target'] = 3
     
     return parcelas_with_target_df.sort_values(by=['codparcela','fecha'])
 
@@ -47,6 +50,8 @@ def create_spine(parcelas_df:pd.DataFrame)->pd.DataFrame:
 
 
 def attach_parcela_var(spine_df:pd.DataFrame, parcelas_df:pd.DataFrame, columns_to_attach:list)->pd.DataFrame:
+    if columns_to_attach == 0:
+        return spine_df
     # Assure join keys are the same type
     spine_df['codparcela'] = spine_df['codparcela'].astype('object')
     spine_df['fecha'] = spine_df['fecha'].astype('datetime64[ns]')
@@ -60,7 +65,8 @@ def attach_parcela_var(spine_df:pd.DataFrame, parcelas_df:pd.DataFrame, columns_
 def attach_meteo_var(
         spine_df:pd.DataFrame, meteo_df:pd.DataFrame, columns_to_attach:list, window_tolerance:int=2
         )->pd.DataFrame:
-    
+    if columns_to_attach == 0:
+        return spine_df
     # Assure join keys are the same type
     spine_df['codparcela'] = spine_df['codparcela'].astype('object')
     spine_df['fecha'] = spine_df['fecha'].astype('datetime64[ns]')
@@ -77,49 +83,15 @@ def attach_meteo_var(
     return total_df
 
 
-def calculate_climatic_stats_time_window(meteo_df:pd.DataFrame, rolling_window:str='30D')->pd.DataFrame:
-    # Format dataframe
-    stat_df = meteo_df[['codparcela','fecha'] + METEO_COLUMNS].copy()
-    stat_df['fecha'] = pd.to_datetime(stat_df['fecha'])
-    stat_df.sort_values(by=['codparcela', 'fecha'], inplace=True)
-    stat_df.set_index('fecha', inplace=True)
-
-    # Calculate descriptive statistics
-    stat_df = stat_df.groupby('codparcela').rolling(rolling_window).agg(['count','mean','std','min','median','max'])
-    stat_df.columns = ['_'.join(col) + '_' + rolling_window  for col in stat_df.columns]
-    stat_df = stat_df.reset_index()
-
-    return stat_df
-
-
-def calculate_week_number(parcelas_df:pd.DataFrame)->pd.DataFrame:
-    df = parcelas_df.copy()
-    # Convert fecha column to datetime
-    df['fecha'] = pd.to_datetime(df['fecha'])
-
-    # Add a new column for the week number
-    df['week_number'] = df['fecha'].dt.isocalendar().week
-    return df
-
-
-def calculates_days_in_phenological_state_current_and_previous(parcelas_df:pd.DataFrame)->pd.DataFrame:
-    df = parcelas_df[['fecha','codparcela','campaña','estado_mayoritario']]
-
-    df = df.sort_values(by=['codparcela', 'fecha'])
-
-    # Calculate days difference
-    df['days_spent'] = df.groupby(['codparcela','campaña'])['fecha'].diff().dt.days
-
-    # Identify changes in 'estado_mayoritario' and assign a group ID for each period of the same state
-    df['state_change'] = df['estado_mayoritario'].ne(df['estado_mayoritario'].shift(1))
-    df['period_id'] = df['state_change'].cumsum()
-
-    # Calculate total days spent in each state before change
-    df['days_in_current_state'] = df.groupby(['codparcela','campaña','period_id'])['days_spent'].cumsum()    
-
-    # Calculate total days spent in previous state
-    df['days_in_previous_state'] = np.where(df['state_change'] == True & df['campaña'].eq(df['campaña'].shift(1)) & df['codparcela'].eq(df['codparcela'].shift(1)),
-                                             df['days_in_current_state'].shift(1), np.nan)
-    df['days_in_previous_state'] = df.groupby(['codparcela','campaña'])['days_in_previous_state'].ffill()
-    
-    return df[['codparcela','fecha','days_in_current_state','days_in_previous_state']]
+def create_feature_frame(
+    parcelas_df: pd.DataFrame,
+    meteo_df: pd.DataFrame,
+    parcelas_cols_to_attach: list[str],
+    meteo_cols_to_attach: list[str],
+) -> pd.DataFrame:
+    feature_frame = (
+        parcelas_df.pipe(create_spine)
+        .pipe(attach_parcela_var, parcelas_df, parcelas_cols_to_attach)
+        .pipe(attach_meteo_var, meteo_df, meteo_cols_to_attach)
+    )
+    return feature_frame

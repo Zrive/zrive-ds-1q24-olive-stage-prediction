@@ -6,9 +6,11 @@ from typing import Optional
 
 logging.basicConfig(level=logging.INFO)
 
-DATA_PATH = os.path.join(os.getcwd(), "..", "data")
+DATA_PATH = os.path.join(os.getcwd(), "..", "..", "data")
 PARCELAS_DATA_PATH = os.path.join(DATA_PATH, "muestreos_parcelas.parquet")
+CLEAN_PARCELAS_DATA_PATH = os.path.join(DATA_PATH, "clean_parcelas.parquet")
 METEO_DATA_PATH = os.path.join(DATA_PATH, "meteo_parcelas.parquet")
+PARCELAS_FEATURE_FRAME_PATH = os.path.join(DATA_PATH, "parcelas_feature_frame.parquet")
 
 PHENOLOGICAL_STATE_COLS = [f"estado_fenologico_{i}" for i in range(14, 0, -1)]
 
@@ -162,7 +164,7 @@ def remove_codparcelas_not_in_meteo_data(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def clean_data(data: pd.DataFrame) -> pd.DataFrame:
+def clean_parcelas_data(data: pd.DataFrame) -> pd.DataFrame:
     logging.info("Cleaning dataset")
 
     logging.info(f"Dataset shape before cleaning: {data.shape}")
@@ -178,8 +180,105 @@ def clean_data(data: pd.DataFrame) -> pd.DataFrame:
     return preprocessed_data
 
 
-def load_clean_data() -> pd.DataFrame:
-    logging.info("Loading dataset")
+def load_and_transform_parcelas_data() -> pd.DataFrame:
+    logging.info("Loading clean parcelas dataset")
     parcelas_raw_data = load_raw_data(PARCELAS_DATA_PATH)
-    data = clean_data(parcelas_raw_data)
+    data = clean_parcelas_data(parcelas_raw_data)
     return data
+
+
+def load_parcelas_data() -> pd.DataFrame:
+    """
+    Load clean parcelas data if it exists, otherwise load and transform the raw data.
+    """
+    if os.path.isfile(CLEAN_PARCELAS_DATA_PATH):
+        data = load_raw_data(CLEAN_PARCELAS_DATA_PATH)
+    else:
+        data = load_and_transform_parcelas_data()
+        data.to_parquet(CLEAN_PARCELAS_DATA_PATH)
+    return data
+
+
+def create_week_number_col(parcelas_df: pd.DataFrame) -> pd.DataFrame:
+    logging.info(f"Executing create_week_number_col")
+
+    df = parcelas_df.copy()
+    # Convert fecha column to datetime
+    df["fecha"] = pd.to_datetime(df["fecha"])
+
+    # Add a new column for the week number
+    df["week_number"] = df["fecha"].dt.isocalendar().week
+
+    logging.info(f"Dataset shape after operation: {df.shape}")
+    return df
+
+
+def create_days_in_phenological_state_current_and_previous_cols(
+    parcelas_df: pd.DataFrame,
+) -> pd.DataFrame:
+    logging.info(
+        f"Executing create_days_in_phenological_state_current_and_previous_cols"
+    )
+
+    df = parcelas_df[["fecha", "codparcela", "campaña", "estado_mayoritario"]]
+
+    df = df.sort_values(by=["codparcela", "fecha"])
+
+    # Calculate days difference
+    df["days_spent"] = df.groupby(["codparcela", "campaña"])["fecha"].diff().dt.days
+
+    # Identify changes in 'estado_mayoritario' and assign a group ID for each period of the same state
+    df["state_change"] = df["estado_mayoritario"].ne(df["estado_mayoritario"].shift(1))
+    df["period_id"] = df["state_change"].cumsum()
+
+    # Calculate total days spent in each state before change
+    df["days_in_current_state"] = df.groupby(["codparcela", "campaña", "period_id"])[
+        "days_spent"
+    ].cumsum()
+
+    # Calculate total days spent in previous state
+    df["days_in_previous_state"] = np.where(
+        df["state_change"]
+        == True
+        & df["campaña"].eq(df["campaña"].shift(1))
+        & df["codparcela"].eq(df["codparcela"].shift(1)),
+        df["days_in_current_state"].shift(1),
+        np.nan,
+    )
+    df["days_in_previous_state"] = df.groupby(["codparcela", "campaña"])[
+        "days_in_previous_state"
+    ].ffill()
+
+    df = df[["fecha", "codparcela", "days_in_current_state", "days_in_previous_state"]]
+    merged_df = pd.merge(parcelas_df, df, on=["fecha", "codparcela"], how="left")
+
+    logging.info(f"Dataset shape after operation: {merged_df.shape}")
+    return merged_df
+
+
+def build_parcelas_feature_frame(meteo_data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Build features from parcelas data.
+    """
+    logging.info("Executing build_parcelas_feature_frame")
+
+    logging.info(f"Initial dataset shape: {meteo_data.shape}")
+    feature_frame = meteo_data.pipe(create_week_number_col).pipe(
+        create_days_in_phenological_state_current_and_previous_cols
+    )
+    return feature_frame
+
+
+def load_parcelas_feature_frame() -> pd.DataFrame:
+    """
+    Build features from parcelas data.
+    """
+    logging.info("Executing load_parcelas_feature_frame")
+
+    if os.path.isfile(PARCELAS_FEATURE_FRAME_PATH):
+        parcelas_feature_frame = load_raw_data(PARCELAS_FEATURE_FRAME_PATH)
+    else:
+        data = load_parcelas_data()
+        parcelas_feature_frame = build_parcelas_feature_frame(data)
+        parcelas_feature_frame.to_parquet(PARCELAS_FEATURE_FRAME_PATH)
+    return parcelas_feature_frame
