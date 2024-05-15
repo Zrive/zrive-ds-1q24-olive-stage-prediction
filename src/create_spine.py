@@ -26,6 +26,9 @@ def generate_target(parcelas_df:pd.DataFrame, window_size:int=14, window_toleran
 
     # Input to 0 when target column is negative
     parcelas_with_target_df.loc[parcelas_with_target_df['target'] < 0, 'target'] = 0
+
+    # Impute to 3 when target column is greater than 3
+    parcelas_with_target_df.loc[parcelas_with_target_df['target'] >= 3, 'target'] = 3
     
     return parcelas_with_target_df.sort_values(by=['codparcela','fecha'])
 

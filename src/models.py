@@ -31,6 +31,15 @@ def train_test_split(df: pd.DataFrame, split_year: int = 2021, max_year: int = N
 # train_set, test_set = train_test_split(df, split_year=2021, max_year=2022)
 
 
+def feature_label_split(df: pd.DataFrame, label_col: str):
+    """
+    Split DataFrame into features (X) and labels (y).
+    """
+    X = df.drop(columns=[label_col])
+    y = df[label_col]
+    return X, y
+
+
 def baseline(train: pd.DataFrame, test: pd.DataFrame, target_column: str):
     """
     Baseline: Calculamos la media ponderada para el DataFrame de entrenamiento y aplicamos el mapeo resultante al conjunto de prueba.
@@ -49,17 +58,17 @@ def baseline(train: pd.DataFrame, test: pd.DataFrame, target_column: str):
     train['weight'] = train['year'].apply(lambda x: 0.1 ** (max_year - x))
 
     # Agrupar por estado fenológico y año, y calcular la media ponderada
-    grouped = train.groupby(['estado_fenologico_unificado', 'year'])
+    grouped = train.groupby(['estado_mayoritario', 'year'])
     weighted_means = grouped.apply(lambda x: (
         x[target_column] * x['weight']).sum() / x['weight'].sum()).reset_index()
     weighted_means.rename(columns={0: 'weighted_mean'}, inplace=True)
 
     # Crear un diccionario con la media ponderada más reciente por estado fenológico
     mapeo_referencia = weighted_means.sort_values('year', ascending=False).drop_duplicates(
-        'estado_fenologico_unificado').set_index('estado_fenologico_unificado')['weighted_mean'].to_dict()
+        'estado_mayoritario').set_index('estado_mayoritario')['weighted_mean'].to_dict()
 
     # Aplicar el mapeo de referencia al conjunto de prueba para obtener las predicciones
-    test['y_pred'] = test['estado_fenologico_unificado'].map(mapeo_referencia)
+    test['y_pred'] = test['estado_mayoritario'].map(mapeo_referencia)
 
     return test
 # baseline(train, test, 'y')
