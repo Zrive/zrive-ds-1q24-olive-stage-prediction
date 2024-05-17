@@ -9,6 +9,7 @@ from sklearn.metrics import (
 )
 from sklearn.pipeline import Pipeline
 import logging
+import numpy as np
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -103,6 +104,32 @@ def evaluate_configuration(
 
     y_test_pred = model.predict(X_test)
     y_train_pred = model.predict(X_train)
+
+    evaluation_metrics[model_name] = {
+        "train": evaluate_classification(y_train, y_train_pred),
+        "test": evaluate_classification(y_test, y_test_pred),
+    }
+    log_metrics(model_name + "_train", evaluation_metrics[model_name]["train"])
+    log_metrics(model_name + "_test", evaluation_metrics[model_name]["test"])
+
+
+def evaluate_configuration_lightgbm(
+    model: Pipeline,
+    model_name: str,
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    X_test: pd.DataFrame,
+    y_test: pd.Series,
+    evaluation_metrics: dict,
+) -> None:
+    # y_test_pred = model.predict_proba(X_test)[:, 1]
+    # y_train_pred = model.predict_proba(X_train)[:, 1]
+
+    y_train_pred_prob = model.predict(X_train, num_iteration=model.best_iteration)
+    y_train_pred = np.argmax(y_train_pred_prob, axis=1)
+
+    y_test_pred_prob = model.predict(X_test, num_iteration=model.best_iteration)
+    y_test_pred = np.argmax(y_test_pred_prob, axis=1)
 
     evaluation_metrics[model_name] = {
         "train": evaluate_classification(y_train, y_train_pred),
